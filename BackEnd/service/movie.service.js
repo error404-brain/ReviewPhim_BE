@@ -1,6 +1,7 @@
 const db = require('../model');
 const { Sequelize } = require('sequelize');
 
+
 const searchMovies = async (title) => {
     return db.Movie.findAll({
         where: {
@@ -17,7 +18,25 @@ const getMovieById = async (id) => {
     });
 };
 
+const insertMovie = async (movie) => {
+    return db.Movie.create(movie);
+};
+
+const updateMovie = async (id, movie) => {
+    return db.Movie.update(movie, {
+        where: { MovieID: id }
+    });
+};
+
+const uploadFile = async (file) => {
+    return { filename: file.filename };
+};
+
+
 module.exports = {
     searchMovies,
-    getMovieById
+    getMovieById,
+    insertMovie,
+    updateMovie,
+    uploadFile
 };

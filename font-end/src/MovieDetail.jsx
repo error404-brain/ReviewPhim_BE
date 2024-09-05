@@ -1,21 +1,38 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import { fetchMovieById, searchMovieByTitle } from './Api'; // Import API functions
+import useStore from './store/useStore'; // Import Zustand store
 
 function MovieDetail() {
   const [movie, setMovie] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
-  const [movieId, setMovieId] = useState(2); // Default to movie with ID 2
+  const [movieId, setMovieId] = useState(null);
+  const [suggestions, setSuggestions] = useState([]);
+
+  const { movies, setMovies, addMovie } = useStore((state) => ({
+    movies: state.movies,
+    setMovies: state.setMovies,
+    addMovie: state.addMovie,
+  }));
 
   useEffect(() => {
-    const fetchMovie = async (id) => {
+    const latestMovie = movies[movies.length - 1];
+    if (latestMovie) {
+      setMovie(latestMovie);
+    }
+  }, [movies]);
+
+  useEffect(() => {
+    const getMovie = async () => {
       try {
-        const response = await axios.get(`http://localhost:3000/movies/search/${id}`);
-        if (response.data) {
-          setMovie(response.data);
-        } else {
-          setMovie(null); // Set movie to null if no data is found
+        if (movieId) {
+          const movieData = await fetchMovieById(movieId);
+          setMovie(movieData);
+          // Save movie to Zustand store
+          if (movieData) {
+            addMovie(movieData);
+          }
         }
       } catch (error) {
         setError('Error fetching movie details');
@@ -24,24 +41,30 @@ function MovieDetail() {
       }
     };
 
-    fetchMovie(movieId);
+    getMovie();
   }, [movieId]);
 
   const handleSearch = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.get(`http://localhost:3000/movies/search?title=${search}`);
-      if (response.data && response.data.length > 0) {
-        setMovieId(response.data[0].MovieID); // Assuming the API returns an array of movies
+      const movies = await searchMovieByTitle(search);
+      if (movies && movies.length > 0) {
+        setSuggestions(movies); // Show suggestions
         setError(null);
       } else {
-        setError('Movie not found');
-        setMovie(null); // Clear movie data when not found
+        setError('No movies found');
+        setSuggestions([]);
       }
       setLoading(true);
     } catch (error) {
       setError('Error searching movie');
     }
+  };
+
+  const handleSelectMovie = async (id) => {
+    setMovieId(id);
+    setSearch('');
+    setSuggestions([]);
   };
 
   const formatCurrency = (amount) => {
@@ -51,13 +74,13 @@ function MovieDetail() {
       maximumFractionDigits: 0
     }).format(amount);
   };
-
+ 
   return (
     <div className="flex flex-col min-h-screen bg-cover bg-center bg-no-repeat"
-         style={{ backgroundImage: `url(${movie ? `/public/${movie.Img_Name}` : ''})` }}>
+         style={{ backgroundImage: `url(${movie ? `http://localhost:3000/public/${movie.Img_Name}` : ''})` }}>
       <header className="bg-gray-900 bg-opacity-80 p-4">
         <div className="container mx-auto flex justify-between items-center">
-          <h1 className="text-white text-3xl font-bebas-neue">PHIM CON KHỉ</h1>
+          <h1 className="text-white text-3xl font-bebas-neue">PHIM CON KHi</h1>
           <form onSubmit={handleSearch} className="relative w-1/2 md:w-1/3">
             <input
               type="text"
@@ -65,11 +88,27 @@ function MovieDetail() {
               placeholder="Search movies..."
               className="w-full bg-gray-700 text-white border border-gray-600 rounded-full py-2 px-4 pl-10 focus:outline-none focus:ring-2 focus:ring-blue-400"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                handleSearch(e); // Search on input change
+              }}
             />
             <svg className="absolute top-1/2 left-3 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-4.35-4.35M15.65 15.65A6.5 6.5 0 1115.65 8.35a6.5 6.5 0 010 7.3z"></path>
             </svg>
+            {suggestions.length > 0 && (
+              <ul className="absolute top-full left-0 w-full bg-gray-700 border border-gray-600 rounded-lg mt-1 z-10">
+                {suggestions.map(movie => (
+                  <li 
+                    key={movie.MovieID} 
+                    className="px-4 py-2 hover:bg-gray-600 cursor-pointer"
+                    onClick={() => handleSelectMovie(movie.MovieID)}
+                  >
+                    {movie.Title}
+                  </li>
+                ))}
+              </ul>
+            )}
           </form>
         </div>
       </header>
@@ -83,7 +122,7 @@ function MovieDetail() {
             <div className="flex flex-col md:flex-row w-full">
               <div className="relative w-full md:w-1/2 lg:w-1/3 h-full flex items-center justify-center p-4">
                 <img
-                  src={`/public/${movie.Img_Name}`} 
+                  src={`http://localhost:3000/public/${movie.Img_Name}`} 
                   alt={movie.Title || 'Movie'}
                   className="w-full h-full object-cover rounded-3xl transition-transform duration-500 hover:scale-105"
                 />
@@ -91,14 +130,14 @@ function MovieDetail() {
               <div className="w-full md:w-1/2 lg:w-2/3 p-6 flex flex-col justify-between text-white">
                 <div>
                   <h1 className="text-5xl md:text-6xl font-bebas-neue mb-4 leading-tight">{movie.Title}</h1>
-                  <p className="text-green-400 text-2xl md:text-3xl mb-4 font-bebas-neue"><strong>Tagline:</strong> {movie.Tagline}</p>
-                  <p className="text-xl md:text-2xl mb-4 font-bebas-neue"><strong>Overview:</strong> {movie.OverView}</p>
-                  <p className="text-xl md:text-2xl mb-4 font-bebas-neue"><strong>Genres:</strong> {movie.Genres}</p>
-                  <p className="text-xl md:text-2xl mb-4 font-bebas-neue"><strong>Production Companies:</strong> {movie.ProductionCompanies}</p>
-                  <p className="text-xl md:text-2xl mb-4 font-bebas-neue"><strong>Release Date:</strong> {new Date(movie.ReleaseDate).toLocaleDateString()}</p>
-                  <p className="text-xl md:text-2xl mb-4 font-bebas-neue"><strong>Revenue:</strong> <span className="text-yellow-400 font-bold">{formatCurrency(movie.Revenue)}</span></p>
-                  <p className="text-xl md:text-2xl mb-4 font-bebas-neue"><strong>Vote Average:</strong> {movie.Vote_Average}</p>
-                  <p className="text-xl md:text-2xl mt-4 font-bebas-neue"><strong>Runtime:</strong> {movie.Runtime} minutes</p>
+                  <p className="text-green-400 text-2xl md:text-3xl mb-4 font-bebas-neue"><strong>Tagline :</strong> {movie.Tagline}</p>
+                  <p className="text-xl md:text-2xl mb-4 font-bebas-neue"><strong>Overview :</strong> {movie.OverView}</p>
+                  <p className="text-xl md:text-2xl mb-4 font-bebas-neue"><strong>Genres :</strong> {movie.Genres}</p>
+                  <p className="text-xl md:text-2xl mb-4 font-bebas-neue"><strong>Production Companies :</strong> {movie.ProductionCompanies}</p>
+                  <p className="text-xl md:text-2xl mb-4 font-bebas-neue"><strong>Release Date :</strong> {new Date(movie.ReleaseDate).toLocaleDateString()}</p>
+                  <p className="text-xl md:text-2xl mb-4 font-bebas-neue"><strong>Revenue :</strong> <span className="text-yellow-400 font-bold">{formatCurrency(movie.Revenue)}</span></p>
+                  <p className="text-xl md:text-2xl mb-4 font-bebas-neue"><strong>Vote Average :</strong> {movie.Vote_Average}</p>
+                  <p className="text-xl md:text-2xl mt-4 font-bebas-neue"><strong>Runtime :</strong> {movie.Runtime} minutes</p>
                 </div>
               </div>
             </div>
@@ -120,6 +159,7 @@ function MovieDetail() {
             </a>
           </div>
         </div>
+        
       </footer>
     </div>
   );
